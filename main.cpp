@@ -183,12 +183,20 @@ double solveLR() {
   return z;
 }
 
-void subgradientOpt() {
+void subgradientOpt(double pi) {
   
+  double T;
+  double zLB; // uma solução viável via heurística.
+  double zUP; // limitante dual (superior)
+  int Gh[MAXM], Gv[MAXM];
+  int sumSquaredG;
+
   int iter = 100;
   while (iter--) {
-    solveLR();
-    //updateLambdas();
+    solveLR(); // resolve relaxação lagrangeana
+    updateG(Gh, Gv, &sumSquaredG); // atualiza os subgradientes e calcula a soma dos Gi^2
+    T = pi*(zUP - zLB) / sumSquaredG; // atualiza o tamanho do passo
+    updateLambdas(T, Gh, Gv);
   }
 
 }
