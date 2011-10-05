@@ -183,6 +183,14 @@ double solveLR() {
   return z;
 }
 
+void updateG(int *Gh, int *Gv, int *sumSquaredG) {
+
+}
+
+void updateLambdas(double T, int *Gh, int *Gv) {
+  
+}
+
 void subgradientOpt(double pi) {
   
   double T;
@@ -216,6 +224,20 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  double pi;
+  ifstream param("param");
+  if (!param.is_open()) {
+    cout << "Não foi possível abrir o arquivo de parâmetros." << endl;
+    return false;
+  }
+  try{
+    param >> pi;
+  }
+  catch (ios_base::failure) {
+    cout << "Erro na leitura do arquivo de parâmetros." << endl;
+    return false;
+  }
+  
   double z = solveLR();
   cout << z << endl;
 
