@@ -2,9 +2,10 @@
 #include <iomanip>
 #include <fstream>
 #include <vector>
+#include <stdio.h>
 
-#define MAXM 1000
-#define MAXV 1000
+#define MAXM 10000
+#define MAXV 10000
 
 using namespace std;
 
@@ -102,18 +103,94 @@ void solveLRi(int f) {
   res = dp[m][bh[f]];
 
   // imprime matriz da dp da mochila
-  for (int i = 0; i <= m; i++) {
-    for (int j = 0; j <= bh[f]; j++) {
-      cout << setw(2) << dp[i][j] << " ";
-    }
-    cout << endl;
-  }
+  // for (int i = 0; i <= m; i++) {
+  //   for (int j = 0; j <= bh[f]; j++) {
+  //     cout << setw(2) << dp[i][j] << " ";
+  //   }
+  //   cout << endl;
+  // }
 
   // desaloca matriz da mochila
   for (int i = 0; i <= m; i++) {
     delete[] dp[i];
   }
   delete[] dp;
+}
+
+// Resolve a mochila da faixa f
+// As faixas f são verticais
+void solveLRj(int f) {
+  // aloca matriz de programacao dinamica da mochila
+  double **dp = new double*[m+1];
+  for (int i = 0; i <= m; i++) {
+    dp[i] = new double[bv[f]+1]; // matriz m X bv[f] (capacidade maxima da mochila)
+  }
+  
+  // zerando primeira coluna
+  for (int i = 0; i < m; i++) { 
+    dp[i][0] = 0;
+  }
+  // zerando primeira linha
+  for (int i = 0; i < bv[f]; i++) {
+    dp[0][i] = 0;
+  }
+
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= bv[f]; j++) {
+      // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
+      if (mv[i-1][f] <= j) {
+        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[i-1][f])] + r[i-1][f]);
+      }
+      else {
+        dp[i][j] = dp[i-1][j];
+      }
+    }
+  }
+
+  res = dp[m][bv[f]];
+
+  // imprime matriz da dp da mochila
+  // for (int i = 0; i <= m; i++) {
+  //   for (int j = 0; j <= bv[f]; j++) {
+  //     cout << setw(2) << dp[i][j] << " ";
+  //   }
+  //   cout << endl;
+  // }
+
+  // desaloca matriz da mochila
+  for (int i = 0; i <= m; i++) {
+    delete[] dp[i];
+  }
+  delete[] dp;
+}
+
+double solveLR() {
+  double z;
+  for (int i = 1; i <= m; i++) {
+    printf("%d\r", i);
+    fflush(stdout);
+    solveLRi(i);
+    z += res;
+    solveLRj(i);
+    z += res;
+  }
+  cout << endl;
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      z += lambda[i][j];
+    }
+  }
+  return z;
+}
+
+void subgradientOpt() {
+  
+  int iter = 100;
+  while (iter--) {
+    solveLR();
+    //updateLambdas();
+  }
+
 }
 
 int main(int argc, char **argv) {
@@ -131,8 +208,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  solveLRi(3);
-  cout << res << endl;
+  double z = solveLR();
+  cout << z << endl;
 
   return 0;
 }
