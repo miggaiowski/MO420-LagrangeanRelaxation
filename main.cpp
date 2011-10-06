@@ -3,9 +3,15 @@
 #include <fstream>
 #include <vector>
 #include <stdio.h>
+#include <cmath>
 
-#define MAXM 10000
-#define MAXV 10000
+#define MAXM 1000
+#define MAXV 1000
+
+#define DEBUG 1
+#define DEBUGLAMBDA 1
+#define DEBUGSUBGRADIENT 1
+#define EPSILON 10e-9
 
 using namespace std;
 
@@ -16,7 +22,22 @@ int mh[MAXM][MAXM], mv[MAXM][MAXM]; // memória necessária para capturar fragme
 int v; // numero de vertices do poligono
 int vx[MAXV], vy[MAXV];
 double lambda[MAXM][MAXM];
+int xh[MAXM][MAXM], xv[MAXM][MAXM];
 double res;
+double **dp;
+
+
+bool equal(double a, double b) {
+  return fabs(a-b) < EPSILON;
+}
+
+void initializeLambdas() {
+  for (int i = 0; i <= m; i++) {
+    for (int j = 0; j <= m; j++) {
+      lambda[i][j] = 0;
+    }
+  }
+}
 
 bool readInput(char *f) {
   ifstream input(f);
@@ -70,21 +91,79 @@ void printInput() {
   cout << endl << k << endl;
 }
 
+
+void printSolution(int f, bool horiz) {
+
+  cout << endl << "Faixa " << f << " ";
+  if (horiz) {
+    cout << "H" << endl;
+    // imprime matriz da dp da mochila
+    for (int i = 0; i <= m; i++) {
+      for (int j = 0; j <= bh[f]; j++) {
+        cout << setw(2) << dp[i][j] << " ";
+      }
+      cout << endl;
+    }
+
+    // imprime tabela com os items selecionados
+    cout << endl << endl << "   ";
+    for (int j = 1; j <= m; j++) {
+      cout <<  setw(2) << j << " ";
+    }
+    cout << endl;
+
+    for (int i = 1; i <= m; i++) {
+      cout << setw(2) << i << " ";
+      for (int j = 1; j <= m; j++) {
+        cout << setw(2) << xh[i][j] << " ";
+      }
+      cout << endl;
+    }
+  }
+  else {
+    cout << "V" << endl;
+    // imprime matriz da dp da mochila
+    for (int i = 0; i <= m; i++) {
+      for (int j = 0; j <= bv[f]; j++) {
+        cout << setw(2) << dp[i][j] << " ";
+      }
+      cout << endl;
+    }
+
+    // imprime tabela com os items selecionados
+    cout << endl << endl << "   ";
+    for (int j = 1; j <= m; j++) {
+      cout <<  setw(2) << j << " ";
+    }
+    cout << endl;
+
+    for (int i = 1; i <= m; i++) {
+      cout << setw(2) << i << " ";
+      for (int j = 1; j <= m; j++) {
+        cout << setw(2) << xv[i][j] << " ";
+      }
+      cout << endl;
+    }
+
+  }
+
+}
+
 // Resolve a mochila da faixa f
 // As faixas f são horizontais
 void solveLRi(int f) {
   // aloca matriz de programacao dinamica da mochila
-  double **dp = new double*[m+1];
+  dp = new double*[m+1];
   for (int i = 0; i <= m; i++) {
     dp[i] = new double[bh[f]+1]; // matriz m X bh[f] (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
-  for (int i = 0; i < m; i++) { 
+  for (int i = 0; i <= m; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  for (int i = 0; i < bh[f]; i++) {
+  for (int i = 0; i <= bh[f]; i++) {
     dp[0][i] = 0;
   }
 
@@ -92,7 +171,7 @@ void solveLRi(int f) {
     for (int j = 1; j <= bh[f]; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mh[f][i-1] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][i-1])] + r[f][i-1]);
+        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][i-1])] + (r[f][i-1] - lambda[f][i]));
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -102,13 +181,27 @@ void solveLRi(int f) {
 
   res = dp[m][bh[f]];
 
-  // imprime matriz da dp da mochila
-  // for (int i = 0; i <= m; i++) {
-  //   for (int j = 0; j <= bh[f]; j++) {
-  //     cout << setw(2) << dp[i][j] << " ";
-  //   }
-  //   cout << endl;
-  // }
+  int i = m, j = bh[f];
+  while (i) {
+    if (dp[i][j] == dp[i-1][j]) {
+      xh[f][i-1] = 0;
+      i--;
+    }
+    else if (equal(dp[i][j], dp[i-1][max(0, j - mh[f][i-1])] + (r[f][i-1] - lambda[f][i]))) {
+      xh[f][i-1] = 1;
+      j = max(0, j - mh[f][i-1]);
+      i--;
+    }
+    // else {
+    //   xh[f][i-1] = 1;
+    //   j = max(0, j - mh[f][i-1]);
+    //   i--;
+    // }
+  }
+
+  #ifdef DEBUG
+  printSolution(f, true);
+  #endif
 
   // desaloca matriz da mochila
   for (int i = 0; i <= m; i++) {
@@ -121,17 +214,17 @@ void solveLRi(int f) {
 // As faixas f são verticais
 void solveLRj(int f) {
   // aloca matriz de programacao dinamica da mochila
-  double **dp = new double*[m+1];
+  dp = new double*[m+1];
   for (int i = 0; i <= m; i++) {
     dp[i] = new double[bv[f]+1]; // matriz m X bv[f] (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
-  for (int i = 0; i < m; i++) { 
+  for (int i = 0; i <= m; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  for (int i = 0; i < bv[f]; i++) {
+  for (int i = 0; i <= bv[f]; i++) {
     dp[0][i] = 0;
   }
 
@@ -139,7 +232,7 @@ void solveLRj(int f) {
     for (int j = 1; j <= bv[f]; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mv[i-1][f] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[i-1][f])] + r[i-1][f]);
+        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[i-1][f])] + (r[i-1][f] - lambda[i][f]));
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -149,13 +242,22 @@ void solveLRj(int f) {
 
   res = dp[m][bv[f]];
 
-  // imprime matriz da dp da mochila
-  // for (int i = 0; i <= m; i++) {
-  //   for (int j = 0; j <= bv[f]; j++) {
-  //     cout << setw(2) << dp[i][j] << " ";
-  //   }
-  //   cout << endl;
-  // }
+  int i = m, j = bv[f];
+  while (i) {
+    if (dp[i][j] == dp[i-1][j]) {
+      xv[i-1][f] = 0;
+      i--;
+    }
+    else if (equal(dp[i][j], dp[i-1][max(0, j - mv[i-1][f])] + (r[i-1][f] - lambda[i][f]))) {
+      xv[i-1][f] = 1;
+      j = max(0, j - mv[i-1][f]);
+      i--;
+    }
+  }
+
+  #ifdef DEBUG
+  printSolution(f, false);
+  #endif
 
   // desaloca matriz da mochila
   for (int i = 0; i <= m; i++) {
@@ -167,14 +269,14 @@ void solveLRj(int f) {
 double solveLR() {
   double z;
   for (int i = 1; i <= m; i++) {
-    printf("%d\r", i);
-    fflush(stdout);
+    // printf("%d\r", i);
+    // fflush(stdout);
     solveLRi(i);
     z += res;
     solveLRj(i);
     z += res;
   }
-  cout << endl;
+  // cout << endl;
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= m; j++) {
       z += lambda[i][j];
@@ -183,28 +285,58 @@ double solveLR() {
   return z;
 }
 
-void updateG(int *Gh, int *Gv, int *sumSquaredG) {
-
+void updateG(int G[MAXM][MAXM], int *sumSquaredG) {
+  *sumSquaredG = 0;
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      G[i][j] = 1 - xh[i][j] - xv[i][j];
+      *sumSquaredG += G[i][j] * G[i][j];
+      #ifdef DEBUGSUBGRADIENT
+      cout << setw(3) << G[i][j] << " ";
+      #endif
+    }
+    #ifdef DEBUGSUBGRADIENT
+    cout << endl;
+    #endif
+  }
 }
 
-void updateLambdas(double T, int *Gh, int *Gv) {
-  
+void updateLambdas(double T, int G[MAXM][MAXM]) {
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      lambda[i][j] = max(0.0, lambda[i][j] - T*G[i][j]);
+      #ifdef DEBUGLAMBDA
+      cout << setw(3) << lambda[i][j] << " ";
+      #endif
+    }
+    #ifdef DEBUGLAMBDA
+    cout << endl;
+    #endif
+  }
+
 }
 
 void subgradientOpt(double pi) {
   
   double T;
   double zLB; // uma solução viável via heurística.
-  double zUP; // limitante dual (superior)
-  int Gh[MAXM], Gv[MAXM];
+  double zUP = 123123123; // limitante dual (superior)
+  double zUP_current; // limitante dual (superior) corrente
+  int G[MAXM][MAXM];
   int sumSquaredG;
 
-  int iter = 100;
+  zLB = 0;
+  int iter = 200;
   while (iter--) {
-    solveLR(); // resolve relaxação lagrangeana
-    updateG(Gh, Gv, &sumSquaredG); // atualiza os subgradientes e calcula a soma dos Gi^2
+    zUP_current = solveLR(); // resolve relaxação lagrangeana
+    cout << zUP_current << endl;
+    if (zUP_current < zUP) {
+      zUP = zUP_current;
+      cout << "Novo limitante dual: " << zUP << endl;
+    }
+    updateG(G, &sumSquaredG); // atualiza os subgradientes e calcula a soma dos Gi^2
     T = pi*(zUP - zLB) / sumSquaredG; // atualiza o tamanho do passo
-    updateLambdas(T, Gh, Gv);
+    updateLambdas(T, G);
   }
 
 }
@@ -237,9 +369,13 @@ int main(int argc, char **argv) {
     cout << "Erro na leitura do arquivo de parâmetros." << endl;
     return false;
   }
-  
+
+  initializeLambdas();
+
   double z = solveLR();
-  cout << z << endl;
+  cout << endl << z << endl;
+
+  // subgradientOpt(pi);
 
   return 0;
 }
