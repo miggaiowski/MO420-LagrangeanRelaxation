@@ -8,9 +8,9 @@
 #define MAXM 1000
 #define MAXV 1000
 
-#define DEBUG 1
-#define DEBUGLAMBDA 1
-#define DEBUGSUBGRADIENT 1
+// #define DEBUG 1
+// #define DEBUGLAMBDA 1
+// #define DEBUGSUBGRADIENT 1
 #define EPSILON 10e-9
 
 using namespace std;
@@ -23,7 +23,6 @@ int v; // numero de vertices do poligono
 int vx[MAXV], vy[MAXV];
 double lambda[MAXM][MAXM];
 int xh[MAXM][MAXM], xv[MAXM][MAXM];
-double res;
 double **dp;
 
 
@@ -151,7 +150,7 @@ void printSolution(int f, bool horiz) {
 
 // Resolve a mochila da faixa f
 // As faixas f são horizontais
-void solveLRi(int f) {
+double solveLRi(int f) {
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
   for (int i = 0; i <= m; i++) {
@@ -170,8 +169,8 @@ void solveLRi(int f) {
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= bh[f]; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
-      if (mh[f][i-1] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][i-1])] + (r[f][i-1] - lambda[f][i]));
+      if (mh[f][i] <= j) {
+        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][i])] + (r[f][i] - lambda[f][i]));
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -179,24 +178,19 @@ void solveLRi(int f) {
     }
   }
 
-  res = dp[m][bh[f]];
+  double res = dp[m][bh[f]];
 
   int i = m, j = bh[f];
   while (i) {
     if (dp[i][j] == dp[i-1][j]) {
-      xh[f][i-1] = 0;
+      xh[f][i] = 0;
       i--;
     }
-    else if (equal(dp[i][j], dp[i-1][max(0, j - mh[f][i-1])] + (r[f][i-1] - lambda[f][i]))) {
-      xh[f][i-1] = 1;
-      j = max(0, j - mh[f][i-1]);
+    else if (equal(dp[i][j], dp[i-1][max(0, j - mh[f][i])] + (r[f][i] - lambda[f][i]))) {
+      xh[f][i] = 1;
+      j = max(0, j - mh[f][i]);
       i--;
     }
-    // else {
-    //   xh[f][i-1] = 1;
-    //   j = max(0, j - mh[f][i-1]);
-    //   i--;
-    // }
   }
 
   #ifdef DEBUG
@@ -208,11 +202,13 @@ void solveLRi(int f) {
     delete[] dp[i];
   }
   delete[] dp;
+
+  return res;
 }
 
 // Resolve a mochila da faixa f
 // As faixas f são verticais
-void solveLRj(int f) {
+double solveLRj(int f) {
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
   for (int i = 0; i <= m; i++) {
@@ -231,8 +227,8 @@ void solveLRj(int f) {
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= bv[f]; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
-      if (mv[i-1][f] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[i-1][f])] + (r[i-1][f] - lambda[i][f]));
+      if (mv[i][f] <= j) {
+        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[i][f])] + (r[i][f] - lambda[i][f]));
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -240,17 +236,17 @@ void solveLRj(int f) {
     }
   }
 
-  res = dp[m][bv[f]];
+  double res = dp[m][bv[f]];
 
   int i = m, j = bv[f];
   while (i) {
     if (dp[i][j] == dp[i-1][j]) {
-      xv[i-1][f] = 0;
+      xv[i][f] = 0;
       i--;
     }
-    else if (equal(dp[i][j], dp[i-1][max(0, j - mv[i-1][f])] + (r[i-1][f] - lambda[i][f]))) {
-      xv[i-1][f] = 1;
-      j = max(0, j - mv[i-1][f]);
+    else if (equal(dp[i][j], dp[i-1][max(0, j - mv[i][f])] + (r[i][f] - lambda[i][f]))) {
+      xv[i][f] = 1;
+      j = max(0, j - mv[i][f]);
       i--;
     }
   }
@@ -264,17 +260,17 @@ void solveLRj(int f) {
     delete[] dp[i];
   }
   delete[] dp;
+
+  return res;
 }
 
 double solveLR() {
-  double z;
+  double z = 0;
   for (int i = 1; i <= m; i++) {
     // printf("%d\r", i);
     // fflush(stdout);
-    solveLRi(i);
-    z += res;
-    solveLRj(i);
-    z += res;
+    z += solveLRi(i);
+    z += solveLRj(i);
   }
   // cout << endl;
   for (int i = 1; i <= m; i++) {
@@ -329,7 +325,7 @@ void subgradientOpt(double pi) {
   int iter = 200;
   while (iter--) {
     zUP_current = solveLR(); // resolve relaxação lagrangeana
-    cout << zUP_current << endl;
+    // cout << zUP_current << endl;
     if (zUP_current < zUP) {
       zUP = zUP_current;
       cout << "Novo limitante dual: " << zUP << endl;
@@ -372,10 +368,10 @@ int main(int argc, char **argv) {
 
   initializeLambdas();
 
-  double z = solveLR();
-  cout << endl << z << endl;
+  // double z = solveLR();
+  // cout << endl << z << endl;
 
-  // subgradientOpt(pi);
+  subgradientOpt(pi);
 
   return 0;
 }
