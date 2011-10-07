@@ -28,7 +28,7 @@ int vx[MAXV], vy[MAXV];
 double **lambda;
 int xh[MAXM][MAXM], xv[MAXM][MAXM];
 double **dp;
-
+int maxiter;
 
 bool equal(double a, double b) {
   return fabs(a-b) < EPSILON;
@@ -389,7 +389,7 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
 
   if (W <= 0) {
     for (int i = 1; i <= sz; i++) {
-      xh[f][disponiveis[i-1]] = 0;
+      xv[disponiveis[i-1]][f] = 0;
     }
     return 0;
   }
@@ -472,20 +472,23 @@ double heuristicLB() {
     lb += mochilaHorizontal(i, pesoRestante, disponiveis) + valorFixo;
   }
   // verificar quais os novos selecionados e fixar.
-  for (int i = 1; i <= m; i++) {
+  for (int j = 1; j <= m; j++) {
     disponiveis.clear();
-    pesoRestante = bv[i];
+    pesoRestante = bv[j];
     valorFixo = 0;
-    for (int j = 1; j <= m; j++) {
-      if (xh[j][i] + xv[j][i] != 1) {
-        disponiveis.push_back(j);
-        pesoRestante -= mv[j][i];
+    for (int i = 1; i <= m; i++) {
+      if (xh[i][j] == 0 && xv[i][j] == 0) { // só estão disponíveis os que ainda não foram selecionadas para a passada vertical
+        disponiveis.push_back(i);
+        pesoRestante -= mv[i][j];
       }
-      else if (xv[j][i] == 1){
-        valorFixo += r[j][i];
+      else if (xh[i][j] == 0 && xv[i][j] == 1) {
+        valorFixo += r[i][j];
+      }
+      else if (xh[i][j] == 1 && xv[i][j] == 1) { // se já foi selecionado pelo horizontal
+        xv[i][j] = 0; // então sai desta mochila
       }
     }
-    lb += mochilaVertical(i, pesoRestante, disponiveis) + valorFixo;
+    lb += mochilaVertical(j, pesoRestante, disponiveis) + valorFixo;
   }
 
   int totalGain = 0;
@@ -526,8 +529,7 @@ void subgradientOpt(double pi) {
   initializeLambdas(); 
 
   zLB = 0; // ainda não temos um bom lower bound, então fica como 0
-  int iter = 1000;
-  while (iter--) {
+  while (maxiter--) {
     zUP_current = solveLR(); // resolve relaxação lagrangeana
     // cout << zUP_current << endl;
     if (zUP_current < zUP) {
@@ -576,6 +578,7 @@ int main(int argc, char **argv) {
   }
   try{
     param >> pi;
+    param >> maxiter;
   }
   catch (ios_base::failure) {
     cout << "Erro na leitura do arquivo de parâmetros." << endl;

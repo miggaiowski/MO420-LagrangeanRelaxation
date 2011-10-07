@@ -1,6 +1,6 @@
 CC=g++
 LDFLAGS= -lm
-CFLAGS= -Wall -pedantic -O3 
+CFLAGS= -Wall -pedantic 
 
 .PHONY: all clean cleanall
 
