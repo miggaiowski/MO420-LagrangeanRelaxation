@@ -4,9 +4,10 @@
 #include <vector>
 #include <stdio.h>
 #include <cmath>
+#include <cassert>
 
-#define MAXM 1000
-#define MAXV 1000
+#define MAXM 100
+#define MAXV 100
 
 // #define DEBUG 1
 // #define DEBUGLAMBDA 1
@@ -17,11 +18,14 @@ using namespace std;
 
 int m, k;
 int bh[MAXM], bv[MAXM]; // capacidade de memória do satélite para as faixas
-int r[MAXM][MAXM]; // ganho pela captura do fragmento i j
-int mh[MAXM][MAXM], mv[MAXM][MAXM]; // memória necessária para capturar fragmento ij em cada observacao.
+// int r[MAXM][MAXM]; // ganho pela captura do fragmento i j
+int **r;
+// int mh[MAXM][MAXM], mv[MAXM][MAXM]; // memória necessária para capturar fragmento ij em cada observacao.
+int **mh, **mv;
 int v; // numero de vertices do poligono
 int vx[MAXV], vy[MAXV];
-double lambda[MAXM][MAXM];
+// double lambda[MAXM][MAXM];
+double **lambda;
 int xh[MAXM][MAXM], xv[MAXM][MAXM];
 double **dp;
 
@@ -46,6 +50,17 @@ bool readInput(char *f) {
 
   try {
     input >> m; // número de faixas
+
+    // aloca matrizes para guardar o ganho e pesos de cada shard.
+    r = new int*[m+1];
+    mh = new int*[m+1];
+    mv = new int*[m+1];
+    for (int i = 0; i <= m; i++) {
+      r[i] = new int[m+1];
+      mh[i] = new int[m+1];
+      mv[i] = new int[m+1];
+    }
+
     int i, bi, j;
     for (int p = 0; p < m; p++) { // lê faixas horizontais e seus bi;
       input >> i;
@@ -77,19 +92,6 @@ bool readInput(char *f) {
   }
   return true;
 }
-
-void printInput() {
-  cout << m << endl;
-  for (int p = 0; p < m; p++) { 
-    cout << p+1<< " " << bh[p+1] << " ";
-  }
-  cout << endl;
-  for (int p = 0; p < m; p++) { 
-    cout << p+1 << " " << bv[p+1] << " ";
-  }
-  cout << endl << k << endl;
-}
-
 
 void printSolution(int f, bool horiz) {
 
@@ -150,11 +152,11 @@ void printSolution(int f, bool horiz) {
 
 // Resolve a mochila da faixa f
 // As faixas f são horizontais
-double solveLRi(int f) {
+double solveLRi(int f, int W) {
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
   for (int i = 0; i <= m; i++) {
-    dp[i] = new double[bh[f]+1]; // matriz m X bh[f] (capacidade maxima da mochila)
+    dp[i] = new double[W+1]; // matriz m X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
@@ -162,12 +164,12 @@ double solveLRi(int f) {
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  for (int i = 0; i <= bh[f]; i++) {
+  for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
 
   for (int i = 1; i <= m; i++) {
-    for (int j = 1; j <= bh[f]; j++) {
+    for (int j = 1; j <= W; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mh[f][i] <= j) {
         dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][i])] + (r[f][i] - lambda[f][i]));
@@ -178,9 +180,9 @@ double solveLRi(int f) {
     }
   }
 
-  double res = dp[m][bh[f]];
+  double res = dp[m][W];
 
-  int i = m, j = bh[f];
+  int i = m, j = W;
   while (i) {
     if (dp[i][j] == dp[i-1][j]) {
       xh[f][i] = 0;
@@ -208,11 +210,11 @@ double solveLRi(int f) {
 
 // Resolve a mochila da faixa f
 // As faixas f são verticais
-double solveLRj(int f) {
+double solveLRj(int f, int W) {
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
   for (int i = 0; i <= m; i++) {
-    dp[i] = new double[bv[f]+1]; // matriz m X bv[f] (capacidade maxima da mochila)
+    dp[i] = new double[W+1]; // matriz m X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
@@ -220,12 +222,12 @@ double solveLRj(int f) {
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  for (int i = 0; i <= bv[f]; i++) {
+  for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
 
   for (int i = 1; i <= m; i++) {
-    for (int j = 1; j <= bv[f]; j++) {
+    for (int j = 1; j <= W; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mv[i][f] <= j) {
         dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[i][f])] + (r[i][f] - lambda[i][f]));
@@ -236,9 +238,9 @@ double solveLRj(int f) {
     }
   }
 
-  double res = dp[m][bv[f]];
+  double res = dp[m][W];
 
-  int i = m, j = bv[f];
+  int i = m, j = W;
   while (i) {
     if (dp[i][j] == dp[i-1][j]) {
       xv[i][f] = 0;
@@ -269,8 +271,8 @@ double solveLR() {
   for (int i = 1; i <= m; i++) {
     // printf("%d\r", i);
     // fflush(stdout);
-    z += solveLRi(i);
-    z += solveLRj(i);
+    z += solveLRi(i, bh[i]);
+    z += solveLRj(i, bv[i]);
   }
   // cout << endl;
   for (int i = 1; i <= m; i++) {
@@ -312,29 +314,242 @@ void updateLambdas(double T, int G[MAXM][MAXM]) {
 
 }
 
+// Resolve a mochila da faixa f considerando apenas os itens disponiveis após fixação
+// As faixas f são horizontais
+double mochilaHorizontal(int f, int W, vector <int> disponiveis) {
+  int sz = disponiveis.size();
+
+  if (W <= 0) {
+    for (int i = 1; i <= sz; i++) {
+      xh[f][disponiveis[i-1]] = 0;
+    }
+    return 0;
+  }
+
+  // aloca matriz de programacao dinamica da mochila
+  dp = new double*[sz+1];
+  for (int i = 0; i <= sz; i++) {
+    dp[i] = new double[W+1]; // matriz sz X W (capacidade maxima da mochila)
+  }
+  
+  // zerando primeira coluna
+  for (int i = 0; i <= sz; i++) { 
+    dp[i][0] = 0;
+  }
+  // zerando primeira linha
+  for (int i = 0; i <= W; i++) {
+    dp[0][i] = 0;
+  }
+
+  for (int i = 1; i <= sz; i++) {
+    for (int j = 1; j <= W; j++) {
+      // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
+      if (mh[f][disponiveis[i-1]] <= j) {
+        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][disponiveis[i-1]])] + r[f][disponiveis[i-1]]);
+      }
+      else {
+        dp[i][j] = dp[i-1][j];
+      }
+    }
+  }
+
+
+  double res = dp[sz][W];
+
+  int i = sz, j = W;
+  while (i) {
+    if (dp[i][j] == dp[i-1][j]) {
+      xh[f][disponiveis[i-1]] = 0;
+      i--;
+    }
+    else if (equal(dp[i][j], dp[i-1][max(0, j - mh[f][disponiveis[i-1]])] + r[f][disponiveis[i-1]])) {
+      xh[f][disponiveis[i-1]] = 1;
+      j = max(0, j - mh[f][disponiveis[i-1]]);
+      i--;
+    }
+  }
+
+  #ifdef DEBUG
+  printSolution(f, true);
+  #endif
+
+  // desaloca matriz da mochila
+  for (int i = 0; i <= sz; i++) {
+    delete[] dp[i];
+  }
+  delete[] dp;
+
+  return res;
+}
+
+// Resolve a mochila da faixa f considerando apenas os itens disponiveis após fixação
+// As faixas f são horizontais
+double mochilaVertical(int f, int W, vector <int> disponiveis) {
+  int sz = disponiveis.size();
+
+  if (W <= 0) {
+    for (int i = 1; i <= sz; i++) {
+      xh[f][disponiveis[i-1]] = 0;
+    }
+    return 0;
+  }
+
+  // aloca matriz de programacao dinamica da mochila
+  dp = new double*[sz+1];
+  for (int i = 0; i <= sz; i++) {
+    dp[i] = new double[W+1]; // matriz sz X W (capacidade maxima da mochila)
+  }
+  
+  // zerando primeira coluna
+  for (int i = 0; i <= sz; i++) { 
+    dp[i][0] = 0;
+  }
+  // zerando primeira linha
+  for (int i = 0; i <= W; i++) {
+    dp[0][i] = 0;
+  }
+
+  for (int i = 1; i <= sz; i++) {
+    for (int j = 1; j <= W; j++) {
+      // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
+      if (mv[disponiveis[i-1]][f] <= j) {
+        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[disponiveis[i-1]][f])] + r[disponiveis[i-1]][f]);
+      }
+      else {
+        dp[i][j] = dp[i-1][j];
+      }
+    }
+  }
+
+  int res = dp[sz][W];
+
+  int i = sz, j = W;
+  while (i) {
+    if (dp[i][j] == dp[i-1][j]) {
+      xv[disponiveis[i-1]][f] = 0;
+      i--;
+    }
+    else if (equal(dp[i][j], dp[i-1][max(0, j - mv[disponiveis[i-1]][f])] + r[disponiveis[i-1]][f])) {
+      xv[disponiveis[i-1]][f] = 1;
+      j = max(0, j - mv[disponiveis[i-1]][f]);
+      i--;
+    }
+  }
+
+  #ifdef DEBUG
+  printSolution(f, true);
+  #endif
+
+  // desaloca matriz da mochila
+  for (int i = 0; i <= sz; i++) {
+    delete[] dp[i];
+  }
+  delete[] dp;
+
+  return res;
+}
+
+
+double heuristicLB() {
+  int lb = 0;
+  vector <int> disponiveis;
+  int valorFixo;
+  int pesoRestante;
+
+  for (int i = 1; i <= m; i++) {
+    disponiveis.clear();
+    pesoRestante = bh[i];
+    valorFixo = 0;
+    for (int j = 1; j <= m; j++) {
+      if (xh[i][j] + xv[i][j] != 1) {
+        disponiveis.push_back(j);
+        pesoRestante -= mh[i][j];
+      }
+      else if (xh[i][j] == 1){
+        valorFixo += r[i][j];
+      }
+    }
+    lb += mochilaHorizontal(i, pesoRestante, disponiveis) + valorFixo;
+  }
+  // verificar quais os novos selecionados e fixar.
+  for (int i = 1; i <= m; i++) {
+    disponiveis.clear();
+    pesoRestante = bv[i];
+    valorFixo = 0;
+    for (int j = 1; j <= m; j++) {
+      if (xh[j][i] + xv[j][i] != 1) {
+        disponiveis.push_back(j);
+        pesoRestante -= mv[j][i];
+      }
+      else if (xv[j][i] == 1){
+        valorFixo += r[j][i];
+      }
+    }
+    lb += mochilaVertical(i, pesoRestante, disponiveis) + valorFixo;
+  }
+
+  int totalGain = 0;
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      if (xh[i][j] == 1)
+        totalGain += r[i][j];
+      if (xv[i][j] == 1) 
+        totalGain += r[i][j];
+      if (xh[i][j] == 1 && xv[i][j] == 1) {
+        cout << "FOOOOODEUUUUUU" << endl;
+        cout << "FOOOOODEUUUUUU" << endl;
+        cout << "FOOOOODEUUUUUU" << endl;
+      }
+    }
+  }
+  
+  // cout << " ----------------------------> " << totalGain << " " << lb << endl;
+
+  return lb;
+}
+
 void subgradientOpt(double pi) {
   
   double T;
-  double zLB; // uma solução viável via heurística.
+  double zLB, zLB_current; // uma solução viável via heurística.
   double zUP = 123123123; // limitante dual (superior)
   double zUP_current; // limitante dual (superior) corrente
   int G[MAXM][MAXM];
   int sumSquaredG;
 
-  zLB = 0;
-  int iter = 200;
+  // aloca matriz com os lambdas
+  lambda = new double*[m+1];
+  for (int i = 0; i <= m; i++) {
+    lambda[i] = new double[m+1]; 
+  }
+
+  initializeLambdas(); 
+
+  zLB = 0; // ainda não temos um bom lower bound, então fica como 0
+  int iter = 1000;
   while (iter--) {
     zUP_current = solveLR(); // resolve relaxação lagrangeana
     // cout << zUP_current << endl;
     if (zUP_current < zUP) {
       zUP = zUP_current;
-      cout << "Novo limitante dual: " << zUP << endl;
+      cout << "Novo limitante dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
     }
     updateG(G, &sumSquaredG); // atualiza os subgradientes e calcula a soma dos Gi^2
-    T = pi*(zUP - zLB) / sumSquaredG; // atualiza o tamanho do passo
+    T = pi*(zUP - 0) / sumSquaredG; // atualiza o tamanho do passo
     updateLambdas(T, G);
+    pi = 0.99 * pi;
+    zLB_current = heuristicLB();
+    if (zLB_current > zLB) {
+      zLB = zLB_current;
+      cout << "Novo limitante primal: " << zLB << endl;
+    }
   }
 
+  // desaloca matriz de lambdas
+  for (int i = 0; i <= m; i++) {
+    delete[] lambda[i];
+  }
+  delete[] lambda;
 }
 
 int main(int argc, char **argv) {
@@ -345,12 +560,13 @@ int main(int argc, char **argv) {
   }
 
   // tenta ler entrada
-  bool r;
-  r = readInput(argv[1]);
-  if (!r) {
+  bool feedback;
+  feedback = readInput(argv[1]);
+  if (!feedback) {
     cout << "Erro ao ler entrada!" << endl;
     return 1;
   }
+
 
   double pi;
   ifstream param("param");
@@ -366,12 +582,22 @@ int main(int argc, char **argv) {
     return false;
   }
 
-  initializeLambdas();
 
   // double z = solveLR();
   // cout << endl << z << endl;
 
   subgradientOpt(pi);
+
+  // desaloca matrizes que guardam ganhos e pesos
+  for (int i = 0; i <= m; i++) {
+    delete[] r[i];
+    delete[] mv[i];
+    delete[] mh[i];
+  }
+  delete[] r;
+  delete[] mv;
+  delete[] mh;
+
 
   return 0;
 }
