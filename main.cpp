@@ -18,20 +18,28 @@ using namespace std;
 
 int m, k;
 int bh[MAXM], bv[MAXM]; // capacidade de memória do satélite para as faixas
-// int r[MAXM][MAXM]; // ganho pela captura do fragmento i j
-int **r;
-// int mh[MAXM][MAXM], mv[MAXM][MAXM]; // memória necessária para capturar fragmento ij em cada observacao.
-int **mh, **mv;
+int **r; // ganho pela captura do fragmento i j
+int **mh, **mv; // memória necessária para capturar fragmento ij em cada observacao.
 int v; // numero de vertices do poligono
 int vx[MAXV], vy[MAXV];
-// double lambda[MAXM][MAXM];
 double **lambda;
 int xh[MAXM][MAXM], xv[MAXM][MAXM];
+int best_xh[MAXM][MAXM], best_xv[MAXM][MAXM];
 double **dp;
 int maxiter;
+double zUP, zLB;
 
 bool equal(double a, double b) {
   return fabs(a-b) < EPSILON;
+}
+
+void copiaMatrizesX() {
+  for (int i = 0; i <= m; i++) {
+    for (int j = 0; j <= m; j++) {
+      best_xh[i][j] = xh[i][j];
+      best_xv[i][j] = xv[i][j];
+    }
+  }
 }
 
 void initializeLambdas() {
@@ -172,7 +180,7 @@ double solveLRi(int f, int W) {
     for (int j = 1; j <= W; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mh[f][i] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][i])] + (r[f][i] - lambda[f][i]));
+        dp[i][j] = max(dp[i-1][j], dp[i-1][j - mh[f][i]] + (r[f][i] - lambda[f][i]));
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -230,7 +238,7 @@ double solveLRj(int f, int W) {
     for (int j = 1; j <= W; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mv[i][f] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[i][f])] + (r[i][f] - lambda[i][f]));
+        dp[i][j] = max(dp[i-1][j], dp[i-1][j - mv[i][f]] + (r[i][f] - lambda[i][f]));
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -345,7 +353,7 @@ double mochilaHorizontal(int f, int W, vector <int> disponiveis) {
     for (int j = 1; j <= W; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mh[f][disponiveis[i-1]] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mh[f][disponiveis[i-1]])] + r[f][disponiveis[i-1]]);
+        dp[i][j] = max(dp[i-1][j], dp[i-1][j - mh[f][disponiveis[i-1]]] + r[f][disponiveis[i-1]]);
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -358,11 +366,12 @@ double mochilaHorizontal(int f, int W, vector <int> disponiveis) {
 
   int i = sz, j = W;
   while (i) {
-    if (dp[i][j] == dp[i-1][j]) {
+    if (equal(dp[i][j], dp[i-1][j])) {
       xh[f][disponiveis[i-1]] = 0;
       i--;
     }
-    else if (equal(dp[i][j], dp[i-1][max(0, j - mh[f][disponiveis[i-1]])] + r[f][disponiveis[i-1]])) {
+    else if (equal(dp[i][j], 
+                   dp[i-1][max(0, j - mh[f][disponiveis[i-1]])] + r[f][disponiveis[i-1]])) {
       xh[f][disponiveis[i-1]] = 1;
       j = max(0, j - mh[f][disponiveis[i-1]]);
       i--;
@@ -413,7 +422,7 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
     for (int j = 1; j <= W; j++) {
       // dp[i][j] = máximo entre {levar o item atual + maximo com a capacidade restante} e {sem o item atual}
       if (mv[disponiveis[i-1]][f] <= j) {
-        dp[i][j] = max(dp[i-1][j], dp[i-1][max(0, j - mv[disponiveis[i-1]][f])] + r[disponiveis[i-1]][f]);
+        dp[i][j] = max(dp[i-1][j], dp[i-1][j - mv[disponiveis[i-1]][f]] + r[disponiveis[i-1]][f]);
       }
       else {
         dp[i][j] = dp[i-1][j];
@@ -425,11 +434,12 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
 
   int i = sz, j = W;
   while (i) {
-    if (dp[i][j] == dp[i-1][j]) {
+    if (equal(dp[i][j], dp[i-1][j])) {
       xv[disponiveis[i-1]][f] = 0;
       i--;
     }
-    else if (equal(dp[i][j], dp[i-1][max(0, j - mv[disponiveis[i-1]][f])] + r[disponiveis[i-1]][f])) {
+    else if (equal(dp[i][j], 
+                   dp[i-1][max(0, j - mv[disponiveis[i-1]][f])] + r[disponiveis[i-1]][f])) {
       xv[disponiveis[i-1]][f] = 1;
       j = max(0, j - mv[disponiveis[i-1]][f]);
       i--;
@@ -451,7 +461,7 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
 
 
 double heuristicLB() {
-  int lb = 0;
+  int lb = 0, lbh = 0, lbv = 0;
   vector <int> disponiveis;
   int valorFixo;
   int pesoRestante;
@@ -462,14 +472,15 @@ double heuristicLB() {
     valorFixo = 0;
     for (int j = 1; j <= m; j++) {
       if (xh[i][j] + xv[i][j] != 1) {
+        xh[i][j] = 0; xv[i][j] = 0;
         disponiveis.push_back(j);
+      }
+      else if (xh[i][j] == 1 && xv[i][j] == 0){
+        valorFixo += r[i][j];
         pesoRestante -= mh[i][j];
       }
-      else if (xh[i][j] == 1){
-        valorFixo += r[i][j];
-      }
     }
-    lb += mochilaHorizontal(i, pesoRestante, disponiveis) + valorFixo;
+    lbh += mochilaHorizontal(i, pesoRestante, disponiveis) + valorFixo;
   }
   // verificar quais os novos selecionados e fixar.
   for (int j = 1; j <= m; j++) {
@@ -479,34 +490,36 @@ double heuristicLB() {
     for (int i = 1; i <= m; i++) {
       if (xh[i][j] == 0 && xv[i][j] == 0) { // só estão disponíveis os que ainda não foram selecionadas para a passada vertical
         disponiveis.push_back(i);
-        pesoRestante -= mv[i][j];
       }
       else if (xh[i][j] == 0 && xv[i][j] == 1) {
         valorFixo += r[i][j];
+        pesoRestante -= mv[i][j];
       }
       else if (xh[i][j] == 1 && xv[i][j] == 1) { // se já foi selecionado pelo horizontal
         xv[i][j] = 0; // então sai desta mochila
       }
     }
-    lb += mochilaVertical(j, pesoRestante, disponiveis) + valorFixo;
+    lbv += mochilaVertical(j, pesoRestante, disponiveis) + valorFixo;
   }
 
-  int totalGain = 0;
+
+  int totalGain = 0, tgh = 0, tgv = 0;
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= m; j++) {
       if (xh[i][j] == 1)
-        totalGain += r[i][j];
+        tgh += r[i][j];
       if (xv[i][j] == 1) 
-        totalGain += r[i][j];
-      if (xh[i][j] == 1 && xv[i][j] == 1) {
-        cout << "FOOOOODEUUUUUU" << endl;
-        cout << "FOOOOODEUUUUUU" << endl;
-        cout << "FOOOOODEUUUUUU" << endl;
-      }
+        tgv += r[i][j];
+      assert(xv[i][j] + xh[i][j] <= 1 && "Item selecionado duas vezes.");
     }
   }
-  
-  // cout << " ----------------------------> " << totalGain << " " << lb << endl;
+  totalGain = tgh + tgv;
+
+  assert(tgv == lbv && "Lower bound vertical não bate com o calculado.");
+  assert(tgh == lbh && "Lower bound horizontal não bate com o calculado.");
+
+  lb = lbv+lbh;
+  assert(totalGain == lb);
 
   return lb;
 }
@@ -514,11 +527,12 @@ double heuristicLB() {
 void subgradientOpt(double pi) {
   
   double T;
-  double zLB, zLB_current; // uma solução viável via heurística.
-  double zUP = 123123123; // limitante dual (superior)
+  double zLB_current; // uma solução viável via heurística.
   double zUP_current; // limitante dual (superior) corrente
   int G[MAXM][MAXM];
   int sumSquaredG;
+
+  zUP = 123123123; // infinito
 
   // aloca matriz com os lambdas
   lambda = new double*[m+1];
@@ -530,11 +544,15 @@ void subgradientOpt(double pi) {
 
   zLB = 0; // ainda não temos um bom lower bound, então fica como 0
   while (maxiter--) {
+
+    if (!(maxiter % 50))
+      cerr << maxiter << " iterações faltando." << endl;
+
     zUP_current = solveLR(); // resolve relaxação lagrangeana
     // cout << zUP_current << endl;
     if (zUP_current < zUP) {
       zUP = zUP_current;
-      cout << "Novo limitante dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
+      cerr << "Novo limitante dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
     }
     updateG(G, &sumSquaredG); // atualiza os subgradientes e calcula a soma dos Gi^2
     T = pi*(zUP - 0) / sumSquaredG; // atualiza o tamanho do passo
@@ -543,8 +561,10 @@ void subgradientOpt(double pi) {
     zLB_current = heuristicLB();
     if (zLB_current > zLB) {
       zLB = zLB_current;
-      cout << "Novo limitante primal: " << zLB << endl;
+      copiaMatrizesX();
+      cerr << "Novo limitante primal: " << (int)zLB << endl;
     }
+    assert((zLB < zUP || equal(zLB, zUP)) && "Limitante Primal maior que Dual!");
   }
 
   // desaloca matriz de lambdas
@@ -552,6 +572,25 @@ void subgradientOpt(double pi) {
     delete[] lambda[i];
   }
   delete[] lambda;
+}
+
+void writeOutput(char *f) {
+  ofstream output(f);
+  
+  output << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
+  output << (int)zLB << endl;
+
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      if (best_xh[i][j] == 1) {
+        output << i << " " << j << " h" << endl;
+      }
+      if (best_xv[i][j] == 1) {
+        output << i << " " << j << " v" << endl;
+      }
+    }
+  }
+
 }
 
 int main(int argc, char **argv) {
@@ -590,6 +629,9 @@ int main(int argc, char **argv) {
   // cout << endl << z << endl;
 
   subgradientOpt(pi);
+  
+  writeOutput(argv[2]);
+
 
   // desaloca matrizes que guardam ganhos e pesos
   for (int i = 0; i <= m; i++) {
