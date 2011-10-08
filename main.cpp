@@ -8,6 +8,7 @@
 
 #define MAXM 1000
 #define MAXV 1000
+#define NUM_THREADS 32
 
 // #define DEBUG 1
 // #define DEBUGLAMBDA 1
@@ -164,15 +165,18 @@ double solveLRi(int f, int W) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) {
     dp[i] = new double[W+1]; // matriz m X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -224,15 +228,18 @@ double solveLRj(int f, int W) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) {
     dp[i] = new double[W+1]; // matriz m X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -279,7 +286,7 @@ double solveLRj(int f, int W) {
 
 double solveLR() {
   double z = 0;
-  #pragma omp parallel num_threads(32)
+  #pragma omp parallel num_threads(NUM_THREADS)
   {
   #pragma omp for
   for (int i = 1; i <= m; i++) {
@@ -342,6 +349,7 @@ double mochilaHorizontal(int f, int W, vector <int> disponiveis) {
   int sz = disponiveis.size();
 
   if (W <= 0) {
+    #pragma omp parallel for num_threads(NUM_THREADS)
     for (int i = 1; i <= sz; i++) {
       xh[f][disponiveis[i-1]] = 0;
     }
@@ -350,15 +358,18 @@ double mochilaHorizontal(int f, int W, vector <int> disponiveis) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[sz+1];
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) {
     dp[i] = new double[W+1]; // matriz sz X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -413,6 +424,7 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
   int sz = disponiveis.size();
 
   if (W <= 0) {
+    #pragma omp parallel for num_threads(NUM_THREADS)
     for (int i = 1; i <= sz; i++) {
       xv[disponiveis[i-1]][f] = 0;
     }
@@ -421,15 +433,18 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[sz+1];
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) {
     dp[i] = new double[W+1]; // matriz sz X W (capacidade maxima da mochila)
   }
   
-  // zerando primeira coluna
+  // zerando primeira coluna 
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
+  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -585,7 +600,7 @@ void subgradientOpt(double pi) {
     assert((zLB < zUP || equal(zLB, zUP)) && "Limitante Primal maior que Dual!");
 
     // criterios de parada
-    if (equal(zLB,zUP)) { // solução tem que ser inteira.
+    if (equal(floor(zLB), floor(zUP))) { // solução tem que ser inteira.
       cerr << "Ótimo na iteração " << iter << endl;
       iter = maxiter;
     }
