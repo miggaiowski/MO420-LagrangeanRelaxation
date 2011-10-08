@@ -1,6 +1,6 @@
-CC=g++
+CC=/opt/local/bin/g++-mp-4.4
 LDFLAGS= -lm
-CFLAGS= -Wall -pedantic -O3
+CFLAGS= -Wall -pedantic -O3 -fopenmp
 
 .PHONY: all clean cleanall
 
