@@ -279,7 +279,7 @@ double solveLRj(int f, int W) {
 
 double solveLR() {
   double z = 0;
-  #pragma omp parallel num_threads(2)
+  #pragma omp parallel num_threads(32)
   {
   #pragma omp for
   for (int i = 1; i <= m; i++) {
@@ -290,14 +290,15 @@ double solveLR() {
     #pragma omp atomic
     z += solveLRj(i, bv[i]);
   }
-  }
+
   // cout << endl;
+  #pragma omp for
   for (int i = 1; i <= m; i++) {
-    // #pragma omp parallel for num_threads(2)
     for (int j = 1; j <= m; j++) {
-      // #pragma omp atomic
+      #pragma omp atomic
       z += lambda[i][j];
     }
+  }
   }
   return z;
 }
