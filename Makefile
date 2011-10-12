@@ -1,4 +1,5 @@
-CC=/opt/local/bin/g++-mp-4.4
+# CC=/opt/local/bin/g++-mp-4.4
+CC=g++
 LDFLAGS= -lm
 CFLAGS= -Wall -pedantic -O3 -fopenmp
 

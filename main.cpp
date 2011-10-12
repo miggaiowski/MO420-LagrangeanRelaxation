@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <cmath>
 #include <cassert>
+#include <ctime>
 
 #define MAXM 1000
 #define MAXV 1000
@@ -13,7 +14,7 @@
 // #define DEBUG 1
 // #define DEBUGLAMBDA 1
 // #define DEBUGSUBGRADIENT 1
-#define EPSILON 10e-9
+#define EPSILON 10e-7
 
 using namespace std;
 
@@ -24,10 +25,15 @@ int **mh, **mv; // memória necessária para capturar fragmento ij em cada obser
 int v; // numero de vertices do poligono
 int vx[MAXV], vy[MAXV];
 double **lambda;
-int xh[MAXM][MAXM], xv[MAXM][MAXM];
-int best_xh[MAXM][MAXM], best_xv[MAXM][MAXM];
+char xh[MAXM][MAXM], xv[MAXM][MAXM];
+char temp_xh[MAXM][MAXM], temp_xv[MAXM][MAXM];
+char temp_xh2[MAXM][MAXM], temp_xv2[MAXM][MAXM];
+char best_xh[MAXM][MAXM], best_xv[MAXM][MAXM];
 int maxiter;
 double zUP, zLB;
+int nSemMelhora = 50;
+time_t startTime, currentTime, maxTime;
+
 
 bool equal(double a, double b) {
   return fabs(a-b) < EPSILON;
@@ -165,18 +171,15 @@ double solveLRi(int f, int W) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) {
     dp[i] = new double[W+1]; // matriz m X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -198,11 +201,17 @@ double solveLRi(int f, int W) {
   int i = m, j = W;
   while (i) {
     if (dp[i][j] == dp[i-1][j]) {
+      #pragma omp critical
+      {
       xh[f][i] = 0;
+      }
       i--;
     }
     else if (equal(dp[i][j], dp[i-1][max(0, j - mh[f][i])] + (r[f][i] - lambda[f][i]))) {
+      #pragma omp critical
+      {
       xh[f][i] = 1;
+      }
       j = max(0, j - mh[f][i]);
       i--;
     }
@@ -228,18 +237,15 @@ double solveLRj(int f, int W) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[m+1];
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) {
     dp[i] = new double[W+1]; // matriz m X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= m; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -261,11 +267,17 @@ double solveLRj(int f, int W) {
   int i = m, j = W;
   while (i) {
     if (dp[i][j] == dp[i-1][j]) {
+      #pragma omp critical
+      {
       xv[i][f] = 0;
+      }
       i--;
     }
     else if (equal(dp[i][j], dp[i-1][max(0, j - mv[i][f])] + (r[i][f] - lambda[i][f]))) {
+      #pragma omp critical
+      {
       xv[i][f] = 1;
+      }
       j = max(0, j - mv[i][f]);
       i--;
     }
@@ -286,60 +298,26 @@ double solveLRj(int f, int W) {
 
 double solveLR() {
   double z = 0;
-  #pragma omp parallel num_threads(NUM_THREADS)
-  {
-  #pragma omp for
+  #pragma omp parallel for reduction(+:z)
   for (int i = 1; i <= m; i++) {
+    // double z1, z2;
     // printf("%d\r", i);
     // fflush(stdout); 
-    #pragma omp atomic
     z += solveLRi(i, bh[i]);
-    #pragma omp atomic
     z += solveLRj(i, bv[i]);
+    // #pragma omp atomic
+    // z += z1+z2;
   }
-
+  
   // cout << endl;
-  #pragma omp for
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= m; j++) {
-      #pragma omp atomic
       z += lambda[i][j];
     }
-  }
   }
   return z;
 }
 
-void updateG(int G[MAXM][MAXM], int *sumSquaredG) {
-  *sumSquaredG = 0;
-  for (int i = 1; i <= m; i++) {
-    for (int j = 1; j <= m; j++) {
-      G[i][j] = 1 - xh[i][j] - xv[i][j];
-      *sumSquaredG += G[i][j] * G[i][j];
-      #ifdef DEBUGSUBGRADIENT
-      cout << setw(3) << G[i][j] << " ";
-      #endif
-    }
-    #ifdef DEBUGSUBGRADIENT
-    cout << endl;
-    #endif
-  }
-}
-
-void updateLambdas(double T, int G[MAXM][MAXM]) {
-  for (int i = 1; i <= m; i++) {
-    for (int j = 1; j <= m; j++) {
-      lambda[i][j] = min((double)(r[i][j]), max(0.0, lambda[i][j] - T*G[i][j]));
-      #ifdef DEBUGLAMBDA
-      cout << setw(3) << lambda[i][j] << " ";
-      #endif
-    }
-    #ifdef DEBUGLAMBDA
-    cout << endl;
-    #endif
-  }
-
-}
 
 // Resolve a mochila da faixa f considerando apenas os itens disponiveis após fixação
 // As faixas f são horizontais
@@ -349,7 +327,6 @@ double mochilaHorizontal(int f, int W, vector <int> disponiveis) {
   int sz = disponiveis.size();
 
   if (W <= 0) {
-    #pragma omp parallel for num_threads(NUM_THREADS)
     for (int i = 1; i <= sz; i++) {
       xh[f][disponiveis[i-1]] = 0;
     }
@@ -358,18 +335,15 @@ double mochilaHorizontal(int f, int W, vector <int> disponiveis) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[sz+1];
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) {
     dp[i] = new double[W+1]; // matriz sz X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -424,7 +398,6 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
   int sz = disponiveis.size();
 
   if (W <= 0) {
-    #pragma omp parallel for num_threads(NUM_THREADS)
     for (int i = 1; i <= sz; i++) {
       xv[disponiveis[i-1]][f] = 0;
     }
@@ -433,18 +406,15 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
 
   // aloca matriz de programacao dinamica da mochila
   dp = new double*[sz+1];
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) {
     dp[i] = new double[W+1]; // matriz sz X W (capacidade maxima da mochila)
   }
   
   // zerando primeira coluna 
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= sz; i++) { 
     dp[i][0] = 0;
   }
   // zerando primeira linha
-  #pragma omp parallel for num_threads(NUM_THREADS)
   for (int i = 0; i <= W; i++) {
     dp[0][i] = 0;
   }
@@ -490,11 +460,51 @@ double mochilaVertical(int f, int W, vector <int> disponiveis) {
   return res;
 }
 
+void copyTempX(int qual) {
+  if (qual == 1) {
+    for (int i = 0; i <= m; i++) {
+      for (int j = 0; j <= m; j++) {
+        temp_xv[i][j] = xv[i][j];
+        temp_xh[i][j] = xh[i][j];
+      }
+    }
+  }
+  else {
+    for (int i = 0; i <= m; i++) {
+      for (int j = 0; j <= m; j++) {
+        temp_xv2[i][j] = xv[i][j];
+        temp_xh2[i][j] = xh[i][j];
+      }
+    }
+  }
+}
+
+void copyTempXBack(int qual) {
+  if (qual == 1) {
+    for (int i = 0; i <= m; i++) {
+      for (int j = 0; j <= m; j++) {
+        xv[i][j] = temp_xv[i][j];
+        xh[i][j] = temp_xh[i][j];
+      }
+    }
+  }
+  else {
+    for (int i = 0; i <= m; i++) {
+      for (int j = 0; j <= m; j++) {
+        xv[i][j] = temp_xv2[i][j];
+        xh[i][j] = temp_xh2[i][j];
+      }
+    }
+  }
+}
 
 double heuristicLB() {
   int lb = 0, lbh = 0, lbv = 0;
+  int lb2 = 0, lbh2 = 0, lbv2 = 0;
 
+  copyTempX(1);
 
+  // primeira parte da heurística, pega os horizontais primeiro.
   for (int i = 1; i <= m; i++) {
     vector <int> disponiveis;
     disponiveis.clear();
@@ -553,7 +563,112 @@ double heuristicLB() {
   lb = lbv+lbh;
   assert(totalGain == lb);
 
-  return lb;
+  
+  copyTempX(2); // temp_xv(h)2 tem a solucao da primeira heuristica
+  copyTempXBack(1); // xv(h) tem a solucao infeasible.
+
+  // segunda parte, pegando na vertical primeiro
+  
+  for (int j = 1; j <= m; j++) {
+    vector <int> disponiveis;
+    disponiveis.clear();
+    int pesoRestante = bv[j];
+    int valorFixo = 0;
+    for (int i = 1; i <= m; i++) {
+      if (xh[i][j] + xv[i][j] != 1) {
+        xh[i][j] = 0; xv[i][j] = 0;
+        disponiveis.push_back(i);
+      }
+      else if (xv[i][j] == 1 && xh[i][j] == 0){
+        valorFixo += r[i][j];
+        pesoRestante -= mv[i][j];
+      }
+    }
+    lbv2 += mochilaVertical(j, pesoRestante, disponiveis) + valorFixo;
+  }
+
+  // verificar quais os novos selecionados e fixar.
+  for (int i = 1; i <= m; i++) {
+    vector <int> disponiveis;
+    disponiveis.clear();
+    int pesoRestante = bh[i];
+    int valorFixo = 0;
+    for (int j = 1; j <= m; j++) {
+      if (xh[i][j] == 0 && xv[i][j] == 0) { // só estão disponíveis os que ainda não foram selecionadas para a passada horizontal
+        disponiveis.push_back(j);
+      }
+      else if (xv[i][j] == 0 && xh[i][j] == 1) {
+        valorFixo += r[i][j];
+        pesoRestante -= mh[i][j];
+      }
+      else if (xh[i][j] == 1 && xv[i][j] == 1) { // se já foi selecionado pelo horizontal
+        xh[i][j] = 0; // então sai desta mochila
+      }
+    }
+    lbh2 += mochilaHorizontal(i, pesoRestante, disponiveis) + valorFixo;
+  }
+
+  totalGain = 0, tgh = 0, tgv = 0;
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      if (xh[i][j] == 1)
+        tgh += r[i][j];
+      if (xv[i][j] == 1) 
+        tgv += r[i][j];
+      assert(xv[i][j] + xh[i][j] <= 1 && "Item selecionado duas vezes.");
+    }
+  }
+  totalGain = tgh + tgv;
+
+  assert(tgv == lbv2 && "Lower bound vertical não bate com o calculado.");
+  assert(tgh == lbh2 && "Lower bound horizontal não bate com o calculado.");
+
+  lb2 = lbv2+lbh2;
+  assert(totalGain == lb2);
+
+  double ret;
+  if (lb > lb2) {
+    ret = lb;
+    copyTempXBack(2); // xv e xh tem a solucao da primeira heuristica
+  }
+  else {
+    ret = lb2;
+  }
+  
+  return ret;
+}
+
+void updateG(int G[MAXM][MAXM], int *sumSquaredG) {
+  *sumSquaredG = 0;
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      G[i][j] = 1 - xh[i][j] - xv[i][j];
+      // if (G[i][j] < 0 && equal(lambda[i][j], 0.0)) {
+      //   G[i][j] = 0;
+      // }
+      *sumSquaredG += G[i][j] * G[i][j];
+      #ifdef DEBUGSUBGRADIENT
+      cout << setw(3) << G[i][j] << " ";
+      #endif
+    }
+    #ifdef DEBUGSUBGRADIENT
+    cout << endl;
+    #endif
+  }
+}
+
+void updateLambdas(double T, int G[MAXM][MAXM]) {
+  for (int i = 1; i <= m; i++) {
+    for (int j = 1; j <= m; j++) {
+      lambda[i][j] = min((double)(r[i][j]), max(0.0, lambda[i][j] - T*G[i][j]));
+      #ifdef DEBUGLAMBDA
+      cout << setw(3) << lambda[i][j] << " ";
+      #endif
+    }
+    #ifdef DEBUGLAMBDA
+    cout << endl;
+    #endif
+  }
 }
 
 void subgradientOpt(double pi) {
@@ -576,21 +691,28 @@ void subgradientOpt(double pi) {
 
   zLB = 0; // ainda não temos um bom lower bound, então fica como 0
   int iter = 0;
+  int iteracoesSemMelhora = 0;
   while (iter++ < maxiter) {
 
-    if (!(iter % 50))
+    iteracoesSemMelhora++;
+
+    if (!(iter % 50)) {
       cerr << maxiter - iter << " iterações faltando." << endl;
+      cerr << "Melhor dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
+      cerr << "Melhor primal: " << (int)zLB << endl;
+    }
 
     zUP_current = solveLR(); // resolve relaxação lagrangeana
     // cout << zUP_current << endl;
     if (zUP_current < zUP) {
       zUP = zUP_current;
       cerr << "Novo limitante dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
+      iteracoesSemMelhora = 0;
     }
     updateG(G, &sumSquaredG); // atualiza os subgradientes e calcula a soma dos Gi^2
-    T = pi*(zUP - 0) / sumSquaredG; // atualiza o tamanho do passo
+    T = pi*(1.05*zUP - zLB) / sumSquaredG; // atualiza o tamanho do passo
     updateLambdas(T, G);
-    pi = 0.99 * pi;
+    pi = 0.999 * pi;
     zLB_current = heuristicLB();
     if (zLB_current > zLB) {
       zLB = zLB_current;
@@ -599,12 +721,25 @@ void subgradientOpt(double pi) {
     }
     assert((zLB < zUP || equal(zLB, zUP)) && "Limitante Primal maior que Dual!");
 
+
+    // Se tiver nSemMelhora iteracoes sem melhora, pi = pi/2;
+    if (iteracoesSemMelhora == nSemMelhora) {
+      cerr << nSemMelhora << " iterações sem melhora. pi: " << pi << " -> " << pi/2 << endl; 
+      pi /= 2;
+      iteracoesSemMelhora = 0;
+    }
+
     // criterios de parada
     if (equal(floor(zLB), floor(zUP))) { // solução tem que ser inteira.
       cerr << "Ótimo na iteração " << iter << endl;
       iter = maxiter;
     }
-
+    currentTime = time(NULL);
+    if (currentTime - startTime > maxTime) { // estourou o tempo
+      cerr << "Tempo máximo de execução excedido: " << currentTime - startTime << " segundos" << endl;
+      cerr << "Número de iterações executadas: " << iter << endl;      
+      iter = maxiter;
+    }
 
   }
 
@@ -659,6 +794,8 @@ int main(int argc, char **argv) {
   try{
     param >> pi;
     param >> maxiter;
+    param >> nSemMelhora; 
+    param >> maxTime;
   }
   catch (ios_base::failure) {
     cout << "Erro na leitura do arquivo de parâmetros." << endl;
@@ -668,6 +805,8 @@ int main(int argc, char **argv) {
 
   // double z = solveLR();
   // cout << endl << z << endl;
+
+  startTime = time(NULL);
 
   subgradientOpt(pi);
   
