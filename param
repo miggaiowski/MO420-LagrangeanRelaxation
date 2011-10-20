@@ -2,9 +2,14 @@
 1000
 30
 3600
+10e-7
+
 
 O programa só lê as primeiras linhas deste arquivo.
+
 A primeira linha é valor de pi.
 A segunda linha: numero maximo de iteracoes.
 A terceira linha é o numero de iteracoes sem melhora para que pi = pi/2
 A quarta linha tem o tempo máximo de execução, em segundos.
+A quinta linha tem o menor valor que pi pode assumir antes de terminar a execucao.
+

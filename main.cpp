@@ -4,12 +4,17 @@
 #include <vector>
 #include <stdio.h>
 #include <cmath>
-#include <cassert>
 #include <ctime>
+#include <signal.h>
+#include <cfloat>
+
+#define NDEBUG 
+#include <cassert>
+
 
 #define MAXM 1000
 #define MAXV 1000
-#define NUM_THREADS 32
+#define NUM_THREADS 16
 
 // #define DEBUG 1
 // #define DEBUGLAMBDA 1
@@ -33,7 +38,15 @@ int maxiter;
 double zUP, zLB;
 int nSemMelhora = 50;
 time_t startTime, currentTime, maxTime;
+double menorPi;
+int iter = 0;
+time_t primalTime, dualTime;
 
+void quit(int pa) {
+  cerr << "Recebi SIGINT, saindo depois desta iteração." << endl;
+  cerr << "Iterações executadas: " << iter << endl;
+  iter = maxiter;
+}
 
 bool equal(double a, double b) {
   return fabs(a-b) < EPSILON;
@@ -545,6 +558,7 @@ double heuristicLB() {
   }
 
 
+#ifdef DEBUG
   int totalGain = 0, tgh = 0, tgv = 0;
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= m; j++) {
@@ -556,6 +570,7 @@ double heuristicLB() {
     }
   }
   totalGain = tgh + tgv;
+#endif
 
   assert(tgv == lbv && "Lower bound vertical não bate com o calculado.");
   assert(tgh == lbh && "Lower bound horizontal não bate com o calculado.");
@@ -608,6 +623,7 @@ double heuristicLB() {
     lbh2 += mochilaHorizontal(i, pesoRestante, disponiveis) + valorFixo;
   }
 
+#ifdef DEBUG
   totalGain = 0, tgh = 0, tgv = 0;
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= m; j++) {
@@ -619,6 +635,7 @@ double heuristicLB() {
     }
   }
   totalGain = tgh + tgv;
+#endif
 
   assert(tgv == lbv2 && "Lower bound vertical não bate com o calculado.");
   assert(tgh == lbh2 && "Lower bound horizontal não bate com o calculado.");
@@ -643,7 +660,7 @@ void updateG(int G[MAXM][MAXM], int *sumSquaredG) {
   for (int i = 1; i <= m; i++) {
     for (int j = 1; j <= m; j++) {
       G[i][j] = 1 - xh[i][j] - xv[i][j];
-      // if (G[i][j] < 0 && equal(lambda[i][j], 0.0)) {
+      // if (G[i][j] > 0 && equal(lambda[i][j], 0.0)) {
       //   G[i][j] = 0;
       // }
       *sumSquaredG += G[i][j] * G[i][j];
@@ -679,7 +696,7 @@ void subgradientOpt(double pi) {
   int G[MAXM][MAXM];
   int sumSquaredG;
 
-  zUP = 123123123; // infinito
+  zUP = DBL_MAX; // infinito
 
   // aloca matriz com os lambdas
   lambda = new double*[m+1];
@@ -690,23 +707,32 @@ void subgradientOpt(double pi) {
   initializeLambdas(); 
 
   zLB = 0; // ainda não temos um bom lower bound, então fica como 0
-  int iter = 0;
   int iteracoesSemMelhora = 0;
+  // int printTimeAgain = 60;
   while (iter++ < maxiter) {
 
     iteracoesSemMelhora++;
 
-    if (!(iter % 50)) {
-      cerr << maxiter - iter << " iterações faltando." << endl;
-      cerr << "Melhor dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
-      cerr << "Melhor primal: " << (int)zLB << endl;
-    }
+    // if (!(iter % 50)) {
+      // cerr << maxiter - iter << " iterações faltando." << endl;
+      // cerr << "Melhor dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
+      // cerr << "Melhor primal: " << (int)zLB << endl;
+    // }
+
+    // if (currentTime-startTime > printTimeAgain) {
+    //   cerr << (currentTime-startTime)/60 << " minutos de execução." << endl;
+    //   cerr << "Melhor dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
+    //   cerr << "Melhor primal: " << (int)zLB << endl;
+    //   printTimeAgain += 60;
+    // }
 
     zUP_current = solveLR(); // resolve relaxação lagrangeana
     // cout << zUP_current << endl;
     if (zUP_current < zUP) {
+      currentTime = time(NULL);
+      dualTime = currentTime - startTime;
       zUP = zUP_current;
-      cerr << "Novo limitante dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
+      // cerr << "Novo limitante dual: " << setiosflags(ios::fixed) << setprecision(6) << zUP << endl;
       iteracoesSemMelhora = 0;
     }
     updateG(G, &sumSquaredG); // atualiza os subgradientes e calcula a soma dos Gi^2
@@ -715,31 +741,44 @@ void subgradientOpt(double pi) {
     pi = 0.999 * pi;
     zLB_current = heuristicLB();
     if (zLB_current > zLB) {
+      currentTime = time(NULL);
+      primalTime = currentTime - startTime;
       zLB = zLB_current;
       copiaMatrizesX();
-      cerr << "Novo limitante primal: " << (int)zLB << endl;
+      // cerr << "Novo limitante primal: " << (int)zLB << endl;
     }
     assert((zLB < zUP || equal(zLB, zUP)) && "Limitante Primal maior que Dual!");
 
+    // cout << iter << " ";
+    // cout << setiosflags(ios::fixed) << setprecision(6) << zUP << " ";
+    // cout << (int)zLB << endl;
 
     // Se tiver nSemMelhora iteracoes sem melhora, pi = pi/2;
     if (iteracoesSemMelhora == nSemMelhora) {
-      cerr << nSemMelhora << " iterações sem melhora. pi: " << pi << " -> " << pi/2 << endl; 
+      // cerr << nSemMelhora << " iterações sem melhora. pi: " << pi << " -> " << pi/2 << endl; 
       pi /= 2;
       iteracoesSemMelhora = 0;
     }
 
     // criterios de parada
     if (equal(floor(zLB), floor(zUP))) { // solução tem que ser inteira.
-      cerr << "Ótimo na iteração " << iter << endl;
+      // cout << "Ótimo na iteração " << iter << endl;
       iter = maxiter;
     }
     currentTime = time(NULL);
     if (currentTime - startTime > maxTime) { // estourou o tempo
-      cerr << "Tempo máximo de execução excedido: " << currentTime - startTime << " segundos" << endl;
-      cerr << "Número de iterações executadas: " << iter << endl;      
+      // cout << "Tempo máximo de execução excedido: " << currentTime - startTime << " segundos" << endl;
+      // cout << "Número de iterações executadas: " << iter << endl;      
       iter = maxiter;
     }
+    if (pi < menorPi) {
+      // cout << "Passo ficou muito pequeno." << endl;
+      // cout << "Número de iterações executadas: " << iter << endl;      
+      iter = maxiter;
+    }    
+
+
+
 
   }
 
@@ -796,22 +835,24 @@ int main(int argc, char **argv) {
     param >> maxiter;
     param >> nSemMelhora; 
     param >> maxTime;
+    param >> menorPi;
   }
   catch (ios_base::failure) {
     cout << "Erro na leitura do arquivo de parâmetros." << endl;
     return false;
   }
 
-
-  // double z = solveLR();
-  // cout << endl << z << endl;
+  signal(SIGINT, quit); // Liga o sinal que pára a execução sem quebrar tudo.
 
   startTime = time(NULL);
+  currentTime = time(NULL);
 
   subgradientOpt(pi);
   
   writeOutput(argv[2]);
 
+  // cout << "dualTime: " << dualTime << endl;
+  // cout << "primalTime: " << primalTime << endl;
 
   // desaloca matrizes que guardam ganhos e pesos
   for (int i = 0; i <= m; i++) {
